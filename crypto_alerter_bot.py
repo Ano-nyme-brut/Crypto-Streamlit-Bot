@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 # --- Configuration du Bot Telegram ---
 # REMPLACER 'VOTRE_TOKEN_TELEGRAM_ICI' PAR LE VRAI TOKEN OBTENU VIA BOTFATHER
-BOT_TOKEN = "VOTRE_TOKEN_TELEGRAM_ICI" 
+BOT_TOKEN = "8360316491:AAGr91BYzrxOBN0w2h2Zp-bWwQOnvZ2ZhCI" 
 
 # Configurer le logging
 logging.basicConfig(
@@ -74,7 +74,8 @@ def check_trading_signal(df):
 
 async def send_alerts_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Vérifie périodiquement les signaux de trading et envoie une alerte si nécessaire."""
-    if TARGET_CHAT_ID == "VOTRE_CHAT_ID_ICI":
+    # Correction pour s'assurer que TARGET_CHAT_ID est un entier ou une string valide avant l'envoi
+    if TARGET_CHAT_ID == "VOTRE_CHAT_ID_ICI" or not TARGET_CHAT_ID:
         logging.warning("Alerte non envoyee: TARGET_CHAT_ID n'est pas configure.")
         return
 
@@ -121,7 +122,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def analyse_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the /analyse command and performs the crypto analysis."""
-    # ... (Le corps de analyse_command reste le même)
     args = context.args
     
     if len(args) != 2:
@@ -171,7 +171,7 @@ async def analyse_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Aide l'utilisateur a trouver l'ID du chat pour les alertes automatiques."""
-    chat_id = update.effective_chat.id
+    chat_id = update.message.chat_id
     await update.message.reply_text(
         f"Votre ID de chat est : `{chat_id}`\n\n"
         "Veuillez copier cet ID et remplacer `VOTRE_CHAT_ID_ICI` dans la variable `TARGET_CHAT_ID` "
