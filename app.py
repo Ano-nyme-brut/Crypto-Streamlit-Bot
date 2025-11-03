@@ -58,7 +58,8 @@ AVAILABLE_SYMBOLS = [
     'XRP/USDT', 'ADA/USDT', 'DOGE/USDT', 'LINK/USDT'
 ]
 
-EXCHANGE = ccxt.binance() 
+# CHANGEMENT IMPORTANT POUR LE DEPLOIEMENT : Utiliser Coinbase Advanced (coinbasepro) pour eviter l'erreur 451 de Binance
+EXCHANGE = ccxt.coinbasepro() 
 RSI_PERIOD = 14
 INITIAL_BALANCE = 1000  # Capital de depart pour le Backtesting
 
@@ -75,6 +76,7 @@ def get_ohlcv_data(symbol, timeframe):
         return df
     except Exception as e:
         st.error(f"Erreur de connexion a l'exchange ou de recuperation des donnees : {e}")
+        st.error("Impossible de charger les données. Veuillez vérifier l'exchange ou la paire selectionnee.")
         return pd.DataFrame()
 
 def calculate_indicators(df):
@@ -154,7 +156,10 @@ st.caption(f"Dernière mise à jour : {datetime.datetime.now().strftime('%Y-%m-%
 # --- 1. Barre Latérale de Configuration ---
 st.sidebar.header("⚙️ Paramètres")
 selected_symbol = st.sidebar.selectbox("Paire Crypto", AVAILABLE_SYMBOLS)
-selected_timeframe = st.sidebar.selectbox("Intervalle", ['1h', '4h', '1d'])
+
+# MODIFICATION : Ajout des intervalles en minutes
+selected_timeframe = st.sidebar.selectbox("Intervalle", ['15m', '30m', '1h', '4h', '1d']) 
+
 st.sidebar.markdown("---")
 st.sidebar.subheader("Stratégie RSI")
 rsi_oversold = st.sidebar.slider("RSI Survente (Achat)", 10, 40, 30)
