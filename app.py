@@ -58,8 +58,8 @@ AVAILABLE_SYMBOLS = [
     'XRP/USDT', 'ADA/USDT', 'DOGE/USDT', 'LINK/USDT'
 ]
 
-# CHANGEMENT IMPORTANT POUR LE DEPLOIEMENT : Utiliser Coinbase Advanced (coinbasepro) pour eviter l'erreur 451 de Binance
-EXCHANGE = ccxt.coinbasepro() 
+# CORRECTION: L'identifiant 'coinbasepro' a ete renomme en 'coinbase' dans ccxt.
+EXCHANGE = ccxt.coinbase() 
 RSI_PERIOD = 14
 INITIAL_BALANCE = 1000  # Capital de depart pour le Backtesting
 
