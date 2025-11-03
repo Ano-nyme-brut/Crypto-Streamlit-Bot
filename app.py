@@ -5,26 +5,42 @@ import pandas_ta as ta
 import datetime
 import matplotlib.pyplot as plt
 
-# --- 1. Custom CSS for Minimalist Design ---
+# --- 1. Custom CSS for Minimalist Design (Dark Theme) ---
 CUSTOM_CSS = """
 <style>
 /* Personnalisation Minimaliste 
-    - Couleurs claires, coins arrondis, ombres subtiles 
+    - Thème Sombre (Dark Theme) pour un meilleur confort visuel.
 */
 
 /* Corps de l'application et fond */
 .stApp {
-    background-color: #f0f2f6; /* Gris tres clair */
+    background-color: #1a1a1a; /* Gris tres fonce / Noir */
+    color: #f0f0f0; /* Texte clair */
 }
 
-/* Conteneurs de donnees (Metrics) */
+/* Conteneurs de donnees (Metrics), Titres, et Sidebar */
 [data-testid="stMetric"] > div {
-    border: 1px solid #e0e0e0;
-    border-radius: 12px; /* Coins arrondis plus prononces */
+    border: 1px solid #333333; /* Bordure sombre */
+    border-radius: 12px; /* Coins arrondis */
     padding: 15px;
-    background-color: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Ombre legere */
+    background-color: #2b2b2b; /* Fond du conteneur légèrement plus clair que l'app */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); /* Ombre plus marquee */
     transition: transform 0.2s;
+    color: #f0f0f0; /* Assurer que le texte dans les conteneurs est clair */
+}
+[data-testid="stMetric"] label {
+    color: #aaaaaa; /* Etiquettes en gris clair */
+}
+
+/* Texte general (Titres et sous-titres) */
+h1, h2, h3, h4, h5, h6, .st-b5, .st-b6, .st-b7 {
+    color: #ffffff; /* Titres en blanc */
+}
+
+/* Sidebar */
+.css-1d3w5iq, .css-1dp5x4y {
+    background-color: #1a1a1a !important; /* Fond de la sidebar en noir */
+    color: #f0f0f0 !important;
 }
 
 /* Style des boutons de rafraichissement */
@@ -148,7 +164,9 @@ def run_backtest(df, rsi_oversold, rsi_overbought):
 # Configuration de la page et injection du CSS
 st.set_page_config(layout="wide", page_title="Mon Bot Analyste Crypto", initial_sidebar_state="expanded")
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True) # Injecte le CSS personnalise
-plt.style.use('ggplot') # Utilise un style Matplotlib propre et moderne
+
+# Changement de style Matplotlib pour correspondre au theme sombre
+plt.style.use('dark_background') 
 
 st.title("💰 Bot d'Analyse Crypto (RSI) & Backtest")
 st.caption(f"Dernière mise à jour : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -211,34 +229,38 @@ if not df.empty:
     
     # 4.1 Graphique du Prix
     fig_price, ax1 = plt.subplots(figsize=(10, 5))
-    ax1.plot(df.index, df['close'], label='Prix de Cloture', color='blue')
-    ax1.set_title(f"Prix de Clôture ({selected_timeframe})", fontsize=14)
-    ax1.set_ylabel("Prix (USDT)", color='blue')
-    ax1.tick_params(axis='y', labelcolor='blue')
-    ax1.grid(True)
+    ax1.plot(df.index, df['close'], label='Prix de Cloture', color='#4CAF50') # Ligne verte
+    ax1.set_title(f"Prix de Clôture ({selected_timeframe})", fontsize=14, color='white')
+    ax1.set_ylabel("Prix (USDT)", color='white')
+    ax1.tick_params(axis='y', labelcolor='white')
+    ax1.tick_params(axis='x', labelcolor='white')
+    ax1.grid(True, color='#444444')
     st.pyplot(fig_price) # Affiche le graphique dans Streamlit
     plt.close(fig_price) # Ferme la figure pour liberer de la memoire
     
     # 4.2 Graphique du RSI
     fig_rsi, ax2 = plt.subplots(figsize=(10, 3))
-    ax2.plot(df.index, df['RSI'], label='RSI (14)', color='purple')
+    ax2.plot(df.index, df['RSI'], label='RSI (14)', color='cyan') # Ligne cyan
     ax2.axhline(rsi_overbought, color='red', linestyle='--', label=f'Surachat ({rsi_overbought})')
     ax2.axhline(rsi_oversold, color='green', linestyle='--', label=f'Survente ({rsi_oversold})')
-    ax2.set_title("Indice de Force Relative (RSI)", fontsize=14)
+    ax2.set_title("Indice de Force Relative (RSI)", fontsize=14, color='white')
     ax2.set_ylim(0, 100) # Fixer l'axe Y du RSI de 0 a 100
-    ax2.legend(loc='lower left')
-    ax2.grid(True)
+    ax2.legend(loc='lower left', frameon=True, facecolor='#2b2b2b', edgecolor='none', labelcolor='white')
+    ax2.tick_params(axis='y', labelcolor='white')
+    ax2.tick_params(axis='x', labelcolor='white')
+    ax2.grid(True, color='#444444')
     st.pyplot(fig_rsi)
     plt.close(fig_rsi)
 
     # 4.3 Graphique du Volume
     fig_volume, ax3 = plt.subplots(figsize=(10, 3))
     # Utiliser une couleur differente pour le volume
-    ax3.bar(df.index, df['volume'], color='gray', alpha=0.6)
-    ax3.set_title("Volume de Trading", fontsize=14)
-    ax3.set_ylabel("Volume", color='gray')
-    ax3.tick_params(axis='y', labelcolor='gray')
-    ax3.grid(True)
+    ax3.bar(df.index, df['volume'], color='#FFA500', alpha=0.6) # Barres oranges
+    ax3.set_title("Volume de Trading", fontsize=14, color='white')
+    ax3.set_ylabel("Volume", color='white')
+    ax3.tick_params(axis='y', labelcolor='white')
+    ax3.tick_params(axis='x', labelcolor='white')
+    ax3.grid(True, color='#444444')
     st.pyplot(fig_volume)
     plt.close(fig_volume)
 
