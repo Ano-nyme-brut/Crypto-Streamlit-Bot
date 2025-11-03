@@ -1,0 +1,5 @@
+streamlit
+ccxt
+pandas
+pandas-ta
+matplotlib
