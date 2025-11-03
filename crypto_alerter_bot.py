@@ -4,12 +4,13 @@ import pandas as pd
 import pandas_ta as ta
 import asyncio
 import logging
+import os # Importation du module OS pour les variables d'environnement
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 # --- Configuration du Bot Telegram ---
-# REMPLACER 'VOTRE_TOKEN_TELEGRAM_ICI' PAR LE VRAI TOKEN OBTENU VIA BOTFATHER
-BOT_TOKEN = "8360316491:AAGr91BYzrxOBN0w2h2Zp-bWwQOnvZ2ZhCI" 
+# Les tokens et IDs sont maintenant charges depuis les variables d'environnement (plus securise)
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "VOTRE_TOKEN_TELEGRAM_ICI") 
 
 # Configurer le logging
 logging.basicConfig(
@@ -18,9 +19,8 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # --- Configuration de l'Alerte Automatique ---
-# IMPORTANT : Remplacez par l'ID de votre chat/groupe
-# Utilisez la commande /getid dans le bot pour trouver votre ID apres le lancement
-TARGET_CHAT_ID = "VOTRE_CHAT_ID_ICI" 
+# L'ID est charge depuis les variables d'environnement
+TARGET_CHAT_ID = os.environ.get("TARGET_CHAT_ID", "VOTRE_CHAT_ID_ICI") # <-- N'oubliez pas de mettre votre ID de Chat ici !
 WATCH_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'ADA/USDT']
 ALERT_TIMEFRAME = '15m' # Verification toutes les 15 minutes
 
@@ -174,8 +174,7 @@ async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     chat_id = update.message.chat_id
     await update.message.reply_text(
         f"Votre ID de chat est : `{chat_id}`\n\n"
-        "Veuillez copier cet ID et remplacer `VOTRE_CHAT_ID_ICI` dans la variable `TARGET_CHAT_ID` "
-        "dans le script Python pour recevoir les alertes automatiques.",
+        "Veuillez copier cet ID et le définir comme variable d'environnement `TARGET_CHAT_ID` sur Render pour recevoir les alertes automatiques.",
         parse_mode='Markdown'
     )
 
@@ -184,7 +183,7 @@ async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 def main() -> None:
     """Start the bot and the job queue."""
     if BOT_TOKEN == "VOTRE_TOKEN_TELEGRAM_ICI":
-        logging.error("Veuillez remplacer 'VOTRE_TOKEN_TELEGRAM_ICI' par votre vrai jeton de bot.")
+        logging.error("Le jeton de bot n'est pas configuré. Veuillez définir la variable d'environnement BOT_TOKEN.")
         return
 
     # 1. Creation de l'Application et passage du token
