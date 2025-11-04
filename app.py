@@ -4,6 +4,7 @@ import pandas as pd
 import pandas_ta as ta
 import datetime
 import matplotlib.pyplot as plt
+import numpy as np # <<< MODIFICATION : Import de numpy pour les calculs de pronostic
 
 # --- 1. Custom CSS for Minimalist Design (Dark Theme) ---
 CUSTOM_CSS = """
@@ -182,7 +183,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Stratégie RSI")
 rsi_oversold = st.sidebar.slider("RSI Survente (Achat)", 10, 40, 30)
 rsi_overbought = st.sidebar.slider("RSI Surachat (Vente)", 60, 90, 70)
-st.sidebar.info(f"**Achat :** RSI < {rsi_oversold} | **Vente :** RSI > {rsi_oversold}")
+st.sidebar.info(f"**Achat :** RSI < {rsi_oversold} | **Vente :** RSI > {rsi_overbought}")
 
 # --- 2. Récupération et Analyse ---
 df = get_ohlcv_data(selected_symbol, selected_timeframe)
@@ -214,7 +215,6 @@ if not df.empty:
     
     backtest_df, final_value, profit_percent, trade_count = run_backtest(df.copy(), rsi_oversold, rsi_overbought)
     
-    # <<< MODIFICATION 1 : Calcul du gain moyen par heure >>>
     # Calcul de la durée du backtest en heures
     start_date = df.index.min()
     end_date = df.index.max()
@@ -226,24 +226,18 @@ if not df.empty:
     
     # Éviter la division par zéro si total_hours est 0 (improbable mais sûr)
     avg_hourly_gain = total_profit / total_hours if total_hours > 0 else 0.0
-    # <<< FIN MODIFICATION 1 >>>
-
-
-    # <<< MODIFICATION 2 : Passage de 3 à 4 colonnes >>>
+    
     col_a, col_b, col_c, col_d = st.columns(4)
-    # <<< FIN MODIFICATION 2 >>>
     
     col_a.metric("Capital Initial", f"${INITIAL_BALANCE:.2f}")
     col_b.metric("Valeur Finale", f"${final_value:.2f}", delta=f"{profit_percent:.2f}%")
     col_c.metric("Nombre de Trades", trade_count)
 
-    # <<< MODIFICATION 3 : Ajout de la nouvelle métrique >>>
     col_d.metric(
         "Gain Moyen / Heure", 
         f"${avg_hourly_gain:.4f}", 
         help=f"Basé sur un gain total de ${total_profit:.2f} sur une période de {total_hours:.1f} heures."
     )
-    # <<< FIN MODIFICATION 3 >>>
 
     st.subheader("Historique des Transactions")
     st.dataframe(backtest_df, use_container_width=True, hide_index=True)
@@ -290,10 +284,81 @@ if not df.empty:
     st.pyplot(fig_volume)
     plt.close(fig_volume)
 
+    # <<< MODIFICATION 4 : Nouveau graphique de pronostic >>>
+    st.header(f"Pronostic du Prix pour {selected_symbol}")
+
+    fig_forecast, ax_forecast = plt.subplots(figsize=(10, 5))
+    
+    # Tracer le prix de clôture historique
+    ax_forecast.plot(df.index, df['close'], label='Prix de Clôture Historique', color='#4CAF50', alpha=0.7)
+
+    # Préparer les données pour le pronostic
+    last_close = df['close'].iloc[-1]
+    last_timestamp = df.index[-1]
+
+    # Déterminer la durée de la projection (par exemple, 10 futures bougies)
+    # Convertir le timeframe en timedelta pour calculer les futures dates
+    if 'm' in selected_timeframe:
+        delta_unit = int(selected_timeframe.replace('m', ''))
+        time_delta = datetime.timedelta(minutes=delta_unit)
+    elif 'h' in selected_timeframe:
+        delta_unit = int(selected_timeframe.replace('h', ''))
+        time_delta = datetime.timedelta(hours=delta_unit)
+    elif 'd' in selected_timeframe:
+        delta_unit = int(selected_timeframe.replace('d', ''))
+        time_delta = datetime.timedelta(days=delta_unit)
+    else: # Fallback au cas où
+        time_delta = datetime.timedelta(hours=1) 
+    
+    future_timestamps = [last_timestamp + (time_delta * (i + 1)) for i in range(10)] # 10 bougies futures
+    forecast_prices = [last_close] # Le premier point de la projection est le dernier prix actuel
+
+    # Définir l'amplitude du mouvement pour la projection (en % du prix actuel)
+    # Ceci est purement un exemple, la logique peut être plus complexe
+    if signal == 'ACHAT FORT':
+        # Projection haussiere
+        for i in range(10):
+            forecast_prices.append(forecast_prices[-1] * (1 + 0.001 * (1 + i/20))) # Légère hausse progressive
+        forecast_color = 'magenta'
+        forecast_label = 'Pronostic : Hausse'
+    elif signal == 'VENTE/CLÔTURE':
+        # Projection baissiere
+        for i in range(10):
+            forecast_prices.append(forecast_prices[-1] * (1 - 0.001 * (1 + i/20))) # Légère baisse progressive
+        forecast_color = 'magenta'
+        forecast_label = 'Pronostic : Baisse'
+    else: # NEUTRE
+        # Projection plate
+        forecast_prices.extend([last_close] * 10)
+        forecast_color = 'yellow'
+        forecast_label = 'Pronostic : Neutre'
+
+    # Concaténer le dernier timestamp historique avec les timestamps futurs pour le tracé
+    plot_timestamps = [last_timestamp] + future_timestamps
+    
+    ax_forecast.plot(plot_timestamps, forecast_prices, 
+                     label=forecast_label, 
+                     color=forecast_color, 
+                     linestyle='--', 
+                     marker='o', 
+                     markersize=4) # Ligne pointillée et marqueurs
+    
+    # Marquer le point de départ du pronostic
+    ax_forecast.plot(last_timestamp, last_close, 'o', color='white', markersize=6, label='Point de départ du pronostic')
+
+    ax_forecast.set_title("Pronostic du Prix basés sur le RSI", fontsize=14, color='white')
+    ax_forecast.set_ylabel("Prix (USDT)", color='white')
+    ax_forecast.tick_params(axis='y', labelcolor='white')
+    ax_forecast.tick_params(axis='x', labelcolor='white')
+    ax_forecast.grid(True, color='#444444')
+    ax_forecast.legend(loc='upper left', frameon=True, facecolor='#2b2b2b', edgecolor='none', labelcolor='white')
+    st.pyplot(fig_forecast)
+    plt.close(fig_forecast)
+    # <<< FIN MODIFICATION 4 >>>
 
 else:
     st.error("Impossible de charger les données. Veuillez vérifier votre connexion ou les paramètres.")
 
 if st.button('🔄 Rafraîchir les Données'):
     st.cache_data.clear()
-    st.rerun() # <<< MODIFICATION : st.experimental_rerun() est obsolète, on utilise st.rerun()
+    st.rerun()
