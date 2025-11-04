@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np 
 
 # --- 1. Custom CSS pour un Design "Fintech Moderne" ---
+# (CSS Inchangé)
 CUSTOM_CSS = """
 <style>
 /* Thème : "Fintech Moderne"
@@ -122,8 +123,10 @@ EXCHANGE = ccxt.coinbase()
 RSI_PERIOD = 14
 
 @st.cache_data(ttl=60*5)
-def get_ohlcv_data(symbol, timeframe):
-    st.info(f"Connexion à l'exchange pour charger les données {symbol}...")
+def get_ohlcv_data(symbol, timeframe, verbose=True): ### MODIFIÉ : Ajout de verbose ###
+    """Récupère les données OHLCV pour un symbole et un intervalle donnés."""
+    if verbose:
+        st.info(f"Connexion à l'exchange pour charger les données {symbol}...")
     try:
         ohlcv = EXCHANGE.fetch_ohlcv(symbol, timeframe, limit=500)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -131,17 +134,20 @@ def get_ohlcv_data(symbol, timeframe):
         df = df.set_index('timestamp')
         return df
     except Exception as e:
-        st.error(f"Erreur de connexion à l'exchange ou de récupération des données : {e}")
-        st.error("Impossible de charger les données. Veuillez vérifier l'exchange ou la paire sélectionnée.")
+        if verbose:
+            st.error(f"Erreur de connexion à l'exchange ou de récupération des données : {e}")
+            st.error("Impossible de charger les données. Veuillez vérifier l'exchange ou la paire sélectionnée.")
         return pd.DataFrame()
 
 def calculate_indicators(df):
+    """Calcule les indicateurs techniques (RSI) pour le DataFrame."""
     if not df.empty:
         df['RSI'] = ta.rsi(df['close'], length=RSI_PERIOD)
         df = df.dropna()
     return df
 
 def check_trading_signal(df, rsi_oversold, rsi_overbought):
+    """Vérifie le dernier signal de trading basé sur le RSI."""
     if df.empty:
         return 'ERREUR', 0.0, 0.0
         
@@ -158,7 +164,49 @@ def check_trading_signal(df, rsi_oversold, rsi_overbought):
     
     return signal, close_price, last_rsi
 
+### NOUVEAU : Fonction pour scanner l'ensemble du marché ###
+@st.cache_data(ttl=60*5)
+def scan_market(symbols, timeframe, rsi_oversold, rsi_overbought):
+    """
+    Scanne toutes les paires dans AVAILABLE_SYMBOLS pour trouver des signaux.
+    Réutilise les fonctions cachées pour l'efficacité.
+    """
+    st.info(f"Scan en cours de {len(symbols)} paires sur l'intervalle {timeframe}...")
+    market_data = []
+    
+    for symbol in symbols:
+        # Récupère les données (verbose=False pour éviter 8 messages "Connexion...")
+        df = get_ohlcv_data(symbol, timeframe, verbose=False) 
+        df = calculate_indicators(df)
+        
+        if not df.empty:
+            signal, price, last_rsi = check_trading_signal(df, rsi_oversold, rsi_overbought)
+            market_data.append({
+                'Paire': symbol,
+                'Prix Actuel': price,
+                'RSI': last_rsi,
+                'Signal': signal
+            })
+        else:
+            market_data.append({
+                'Paire': symbol,
+                'Prix Actuel': 0.0,
+                'RSI': 0.0,
+                'Signal': 'ERREUR DATA'
+            })
+    
+    # Conversion en DataFrame pour un tri et un affichage faciles
+    market_df = pd.DataFrame(market_data)
+    
+    # Tri par RSI (croissant) pour trouver les "meilleurs à acheter" (plus survendus)
+    market_df = market_df.sort_values(by='RSI', ascending=True)
+    
+    return market_df
+### FIN NOUVEAU ###
+
+
 def run_backtest(df, rsi_oversold, rsi_overbought, start_balance):
+    """Exécute un backtest simple basé sur la stratégie RSI."""
     if df.empty:
         return pd.DataFrame(), 0.0, 0.0, 0
     
@@ -208,7 +256,7 @@ st.caption(f"Dernière mise à jour : {datetime.datetime.now().strftime('%Y-%m-%
 
 # --- 1. Barre Latérale de Configuration ---
 st.sidebar.header("⚙️ Paramètres")
-selected_symbol = st.sidebar.selectbox("Paire Crypto", AVAILABLE_SYMBOLS)
+selected_symbol = st.sidebar.selectbox("Paire Crypto (pour Analyse Détaillée)", AVAILABLE_SYMBOLS)
 selected_timeframe = st.sidebar.selectbox("Intervalle", ['15m', '30m', '1h', '4h', '1d']) 
 
 st.sidebar.markdown("---")
@@ -228,13 +276,15 @@ rsi_overbought = st.sidebar.slider("RSI Surachat (Vente)", 60, 90, 70)
 st.sidebar.info(f"**Achat :** RSI < {rsi_oversold} | **Vente :** RSI > {rsi_overbought}")
 
 # --- 2. Récupération et Analyse ---
-df = get_ohlcv_data(selected_symbol, selected_timeframe)
+# On charge d'abord les données pour l'actif SÉLECTIONNÉ
+# (verbose=True pour afficher le message "Connexion...")
+df = get_ohlcv_data(selected_symbol, selected_timeframe, verbose=True) 
 df = calculate_indicators(df)
 
 if not df.empty:
     signal, price, last_rsi = check_trading_signal(df, rsi_oversold, rsi_overbought)
     
-    st.header("Analyse en Temps Réel")
+    st.header(f"Analyse Détaillée : {selected_symbol}")
     
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Paire / Intervalle", f"{selected_symbol} / {selected_timeframe}")
@@ -251,8 +301,41 @@ if not df.empty:
         
     st.markdown("---")
     
-    # --- 3. Backtesting et Performance ---
-    st.header("Backtesting de la Stratégie")
+    ### NOUVEAU : Section "Pronostic du Marché" (Scanner) ###
+    st.header("🔍 Pronostic du Marché (Scanner)")
+    st.caption(f"Analyse de toutes les paires sur l'intervalle {selected_timeframe} pour trouver les meilleures opportunités d'achat (RSI bas).")
+
+    # Appel de la nouvelle fonction de scan
+    market_scan_df = scan_market(
+        AVAILABLE_SYMBOLS, 
+        selected_timeframe, 
+        rsi_oversold, 
+        rsi_overbought
+    )
+    
+    # Formatage optionnel pour un plus bel affichage
+    formatted_scan_df = market_scan_df.copy()
+    formatted_scan_df['Prix Actuel'] = formatted_scan_df['Prix Actuel'].map('${:,.2f}'.format)
+    formatted_scan_df['RSI'] = formatted_scan_df['RSI'].map('{:.2f}'.format)
+    
+    # Affichage du DataFrame avec les résultats du scan
+    st.dataframe(
+        formatted_scan_df, 
+        use_container_width=True, 
+        hide_index=True,
+        # Configuration des colonnes pour un meilleur dimensionnement
+        column_config={
+            "Paire": st.column_config.TextColumn("Paire", width="small"),
+            "Prix Actuel": st.column_config.TextColumn("Prix Actuel", width="medium"),
+            "RSI": st.column_config.TextColumn("RSI", width="small"),
+            "Signal": st.column_config.TextColumn("Signal", width="medium"),
+        }
+    )
+    st.markdown("---")
+    ### FIN NOUVEAU ###
+
+    # --- 3. Backtesting et Performance (pour l'actif sélectionné) ---
+    st.header(f"Backtesting de la Stratégie sur {selected_symbol}")
     
     backtest_df, final_value, profit_percent, trade_count = run_backtest(
         df.copy(), 
@@ -296,7 +379,7 @@ if not df.empty:
 
     st.markdown("---")
 
-    # --- 4. Visualisation Graphique ---
+    # --- 4. Visualisation Graphique (pour l'actif sélectionné) ---
     st.header(f"Graphiques d'Analyse Technique pour {selected_symbol}")
     
     # 4.1 Graphique du Prix
@@ -335,7 +418,7 @@ if not df.empty:
     st.pyplot(fig_volume)
     plt.close(fig_volume)
 
-    # 4.4 Graphique de pronostic
+    # 4.4 Graphique de pronostic (pour l'actif sélectionné)
     st.header(f"Pronostic du Prix pour {selected_symbol}")
     fig_forecast, ax_forecast = plt.subplots(figsize=(10, 5))
     
