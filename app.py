@@ -6,106 +6,142 @@ import datetime
 import matplotlib.pyplot as plt
 import numpy as np 
 
-# --- 1. Custom CSS for Minimalist Design (Dark Theme) ---
+# --- 1. Custom CSS pour un Design "Fintech Moderne" ---
 CUSTOM_CSS = """
 <style>
-/* Personnalisation Minimaliste 
-    - Thème Sombre (Dark Theme) pour un meilleur confort visuel.
+/* Thème : "Fintech Moderne"
+    - Palette sombre avec des accents "électriques" (bleu/cyan).
+    - Cartes flottantes sans bordures.
+    - Typographie plus nette.
 */
 
-/* Corps de l'application et fond */
+/* Police de base et fond général de l'application */
 .stApp {
-    background-color: #1a1a1a; /* Gris tres fonce / Noir */
-    color: #f0f0f0; /* Texte clair */
+    font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+    background-color: #1a1a1a; /* Fond principal (très sombre) */
+    color: #f0f0f0; /* Texte clair par défaut */
 }
 
-/* Conteneurs de donnees (Metrics), Titres, et Sidebar */
+/* Conteneurs de données (Metrics) */
 [data-testid="stMetric"] > div {
-    border: 1px solid #333333; /* Bordure sombre */
-    border-radius: 12px; /* Coins arrondis */
-    padding: 15px;
-    background-color: #2b2b2b; /* Fond du conteneur légèrement plus clair que l'app */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); /* Ombre plus marquee */
-    transition: transform 0.2s;
-    color: #f0f0f0; /* Assurer que le texte dans les conteneurs est clair */
+    border: none; /* Suppression de la bordure */
+    border-radius: 12px;
+    padding: 18px;
+    background-color: #2b2b2b; /* Fond de la carte (plus clair) */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); /* Ombre plus douce */
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
+
+/* Effet de survol pour les cartes */
+[data-testid="stMetric"] > div:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Étiquettes des métriques (ex: "Prix Actuel") */
 [data-testid="stMetric"] label {
-    color: #aaaaaa; /* Etiquettes en gris clair */
+    color: #aaaaaa;
+    font-weight: 500;
 }
 
-/* Texte general (Titres et sous-titres) */
-h1, h2, h3, h4, h5, h6, .st-b5, .st-b6, .st-b7 {
-    color: #ffffff; /* Titres en blanc */
+/* Valeur principale des métriques (le chiffre) */
+[data-testid="stMetric"] p {
+    color: #ffffff;
+    font-weight: 600;
 }
 
-/* Sidebar */
+/* Titre principal (H1) avec dégradé */
+h1 {
+    background: -webkit-linear-gradient(45deg, #00A3FF, #00FFC2 80%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    padding-bottom: 0.5rem;
+}
+
+/* Titres de section (H2, H3) */
+h2, h3 {
+    color: #00A3FF; /* Accent bleu vif pour les sections */
+    border-bottom: 1px solid #333;
+    padding-bottom: 5px;
+    margin-top: 1rem;
+}
+
+/* Barre latérale (Sidebar) */
 .css-1d3w5iq, .css-1dp5x4y {
-    background-color: #1a1a1a !important; /* Fond de la sidebar en noir */
-    color: #f0f0f0 !important;
+    background-color: #151515 !important; /* Plus sombre que le fond pour la séparation */
 }
 
-/* Style des boutons de rafraichissement */
+/* Boutons */
 .stButton>button {
     border-radius: 8px;
     border: none;
     color: white;
-    background-color: #1f77b4; /* Bleu Streamlit standard */
-    transition: all 0.2s;
     font-weight: 600;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(45deg, #007BFF, #00A3FF);
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 163, 255, 0.3);
 }
 .stButton>button:hover {
-    background-color: #1a5e8e;
+    background: linear-gradient(45deg, #00A3FF, #007BFF);
+    box-shadow: 0 4px 12px rgba(0, 163, 255, 0.5);
+    transform: translateY(-2px);
 }
 
-/* Masquer le pied de page 'Made with Streamlit' (optional for clean look) */
+/* Style personnalisé pour les signaux (Succès, Erreur, Avertissement) */
+[data-testid="stSuccess"] {
+    background-color: rgba(0, 255, 194, 0.1);
+    border: 1px solid #00FFC2;
+    border-radius: 8px;
+    color: #00FFC2; /* Texte Cyan/Vert */
+}
+[data-testid="stError"] {
+    background-color: rgba(255, 71, 71, 0.1);
+    border: 1px solid #FF4747;
+    border-radius: 8px;
+    color: #FF4747; /* Texte Rouge Vif */
+}
+[data-testid="stWarning"] {
+    background-color: rgba(255, 179, 0, 0.1);
+    border: 1px solid #FFB300;
+    border-radius: 8px;
+    color: #FFD700; /* Texte Or/Jaune */
+}
+
+/* Masquer le pied de page 'Made with Streamlit' */
 footer { visibility: hidden; }
-
-/* Ajuster l'espacement autour des titres */
-h1, h2, h3 {
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-}
 </style>
 """
 
 # --- Configuration et Constantes ---
-# Liste des paires que vous souhaitez analyser
 AVAILABLE_SYMBOLS = [
     'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 
     'XRP/USDT', 'ADA/USDT', 'DOGE/USDT', 'LINK/USDT'
 ]
-
-# CORRECTION: L'identifiant 'coinbasepro' a ete renomme en 'coinbase' dans ccxt.
 EXCHANGE = ccxt.coinbase() 
 RSI_PERIOD = 14
-# <<< MODIFICATION : Le capital initial est maintenant défini par l'utilisateur
-# INITIAL_BALANCE = 1000  <-- Supprimé
 
-@st.cache_data(ttl=60*5) # Mise en cache des donnees pour 5 minutes
+@st.cache_data(ttl=60*5)
 def get_ohlcv_data(symbol, timeframe):
-    """Recupere les donnees OHLCV de l'exchange."""
-    st.info(f"Connexion a l'exchange pour charger les donnees {symbol}...")
+    st.info(f"Connexion à l'exchange pour charger les données {symbol}...")
     try:
-        # Recupere 500 dernieres bougies
         ohlcv = EXCHANGE.fetch_ohlcv(symbol, timeframe, limit=500)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df = df.set_index('timestamp')
         return df
     except Exception as e:
-        st.error(f"Erreur de connexion a l'exchange ou de recuperation des donnees : {e}")
-        st.error("Impossible de charger les données. Veuillez vérifier l'exchange ou la paire selectionnee.")
+        st.error(f"Erreur de connexion à l'exchange ou de récupération des données : {e}")
+        st.error("Impossible de charger les données. Veuillez vérifier l'exchange ou la paire sélectionnée.")
         return pd.DataFrame()
 
 def calculate_indicators(df):
-    """Calcule le RSI et d'autres indicateurs necessaires."""
     if not df.empty:
         df['RSI'] = ta.rsi(df['close'], length=RSI_PERIOD)
         df = df.dropna()
     return df
 
 def check_trading_signal(df, rsi_oversold, rsi_overbought):
-    """Analyse la derniere ligne du DataFrame pour generer un signal en temps reel."""
     if df.empty:
         return 'ERREUR', 0.0, 0.0
         
@@ -122,27 +158,21 @@ def check_trading_signal(df, rsi_oversold, rsi_overbought):
     
     return signal, close_price, last_rsi
 
-# <<< MODIFICATION : La fonction accepte maintenant 'start_balance' en argument
 def run_backtest(df, rsi_oversold, rsi_overbought, start_balance):
-    """Simule la strategie RSI sur les donnees historiques."""
     if df.empty:
         return pd.DataFrame(), 0.0, 0.0, 0
     
-    # 1. Generer les signaux historiques
-    df['Signal'] = 0  # 0: Hold
-    df.loc[df['RSI'] < rsi_oversold, 'Signal'] = 1  # 1: Acheter (Survente)
-    df.loc[df['RSI'] > rsi_overbought, 'Signal'] = -1  # -1: Vendre (Surachat)
+    df['Signal'] = 0
+    df.loc[df['RSI'] < rsi_oversold, 'Signal'] = 1
+    df.loc[df['RSI'] > rsi_overbought, 'Signal'] = -1
     
-    # 2. Simulation de trading
-    # <<< MODIFICATION : Utilise le 'start_balance' fourni par l'utilisateur
     balance = start_balance 
-    position = 0.0 # Quantite de crypto possedee
+    position = 0.0
     trade_count = 0
     
     backtest_df = pd.DataFrame(columns=['Date', 'Type', 'Prix', 'Quantité', 'Capital'])
 
     for index, row in df.iterrows():
-        # LOGIQUE D'ACHAT
         if row['Signal'] == 1 and position == 0:
             amount_to_buy = balance * 0.98 / row['close'] 
             balance -= amount_to_buy * row['close']
@@ -150,17 +180,14 @@ def run_backtest(df, rsi_oversold, rsi_overbought, start_balance):
             trade_count += 1
             backtest_df.loc[len(backtest_df)] = [index.strftime('%Y-%m-%d %H:%M'), 'ACHAT', f"{row['close']:.2f}", amount_to_buy, f"{balance:.2f}"]
             
-        # LOGIQUE DE VENTE
         elif row['Signal'] == -1 and position > 0:
             balance += position * row['close']
             position = 0.0
             trade_count += 1
             backtest_df.loc[len(backtest_df)] = [index.strftime('%Y-%m-%d %H:%M'), 'VENTE', f"{row['close']:.2f}", 0, f"{balance:.2f}"]
 
-    # 3. Calcul du resultat final
     final_value = balance + (position * df['close'].iloc[-1])
     
-    # <<< MODIFICATION : Calcule le profit en % basé sur 'start_balance'
     if start_balance > 0:
         profit_percent = ((final_value - start_balance) / start_balance) * 100
     else:
@@ -170,11 +197,10 @@ def run_backtest(df, rsi_oversold, rsi_overbought, start_balance):
 
 # --- Interface Streamlit ---
 
-# Configuration de la page et injection du CSS
 st.set_page_config(layout="wide", page_title="Mon Bot Analyste Crypto", initial_sidebar_state="expanded")
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True) # Injecte le CSS personnalise
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True) # Injecte le CSS personnalisé
 
-# Changement de style Matplotlib pour correspondre au theme sombre
+# Changement de style Matplotlib pour correspondre au thème sombre
 plt.style.use('dark_background') 
 
 st.title("💰 Bot d'Analyse Crypto (RSI) & Backtest")
@@ -186,19 +212,16 @@ selected_symbol = st.sidebar.selectbox("Paire Crypto", AVAILABLE_SYMBOLS)
 selected_timeframe = st.sidebar.selectbox("Intervalle", ['15m', '30m', '1h', '4h', '1d']) 
 
 st.sidebar.markdown("---")
-
-# <<< MODIFICATION : Ajout de la case pour le "prix à mettre" (capital)
 st.sidebar.subheader("💰 Capital (Prix à mettre)")
 user_capital = st.sidebar.number_input(
     "Capital de départ (USDT)", 
-    min_value=10.0,  # Minimum 10 USDT
-    value=1000.0,    # Valeur par défaut
-    step=50.0,       # Incrément
+    min_value=10.0, 
+    value=1000.0, 
+    step=50.0,
     help="Entrez le montant que vous souhaitez simuler pour le backtest."
 )
-# <<< FIN MODIFICATION
-
 st.sidebar.markdown("---")
+
 st.sidebar.subheader("Stratégie RSI")
 rsi_oversold = st.sidebar.slider("RSI Survente (Achat)", 10, 40, 30)
 rsi_overbought = st.sidebar.slider("RSI Surachat (Vente)", 60, 90, 70)
@@ -209,7 +232,6 @@ df = get_ohlcv_data(selected_symbol, selected_timeframe)
 df = calculate_indicators(df)
 
 if not df.empty:
-    # Analyse en temps reel
     signal, price, last_rsi = check_trading_signal(df, rsi_oversold, rsi_overbought)
     
     st.header("Analyse en Temps Réel")
@@ -219,7 +241,7 @@ if not df.empty:
     col2.metric("Prix Actuel", f"${price:.2f}")
     col3.metric(f"RSI ({RSI_PERIOD})", f"{last_rsi:.2f}")
     
-    # Affichage du Signal
+    # Affichage du Signal (utilise les styles CSS personnalisés)
     if signal == 'ACHAT FORT':
         col4.success(f"SIGNAL : {signal}")
     elif signal == 'VENTE/CLÔTURE':
@@ -232,34 +254,25 @@ if not df.empty:
     # --- 3. Backtesting et Performance ---
     st.header("Backtesting de la Stratégie")
     
-    # <<< MODIFICATION : Passe 'user_capital' à la fonction de backtest
     backtest_df, final_value, profit_percent, trade_count = run_backtest(
         df.copy(), 
         rsi_oversold, 
         rsi_overbought, 
-        user_capital # Utilise le capital de l'utilisateur
+        user_capital
     )
     
-    # Calcul de la durée du backtest en heures
     start_date = df.index.min()
     end_date = df.index.max()
     duration_timedelta = end_date - start_date
     total_hours = duration_timedelta.total_seconds() / 3600
-
-    # <<< MODIFICATION : Calcule le profit total basé sur 'user_capital'
     total_profit = final_value - user_capital
-    
-    # Éviter la division par zéro si total_hours est 0
     avg_hourly_gain = total_profit / total_hours if total_hours > 0 else 0.0
     
-    # <<< MODIFICATION : Passage de 4 à 5 colonnes pour la nouvelle case
     col_a, col_b, col_c, col_d, col_e = st.columns(5)
     
-    # Affiche le capital initial entré par l'utilisateur
     col_a.metric("Capital Initial", f"${user_capital:.2f}") 
     col_b.metric("Valeur Finale", f"${final_value:.2f}", delta=f"{profit_percent:.2f}%")
     
-    # <<< MODIFICATION : Ajout de la case "Potentiel de Gain"
     gain_delta_color = "normal"
     if total_profit < 0:
         gain_delta_color = "inverse"
@@ -270,7 +283,6 @@ if not df.empty:
         delta_color=gain_delta_color,
         help="Ceci est le gain (ou la perte) net en dollars sur la période de simulation."
     )
-    # <<< FIN MODIFICATION
     
     col_d.metric("Nombre de Trades", trade_count)
     col_e.metric(
@@ -284,27 +296,27 @@ if not df.empty:
 
     st.markdown("---")
 
-    # --- 4. Visualisation Graphique (Mise a jour avec Matplotlib explicite et Volume) ---
+    # --- 4. Visualisation Graphique ---
     st.header(f"Graphiques d'Analyse Technique pour {selected_symbol}")
     
     # 4.1 Graphique du Prix
     fig_price, ax1 = plt.subplots(figsize=(10, 5))
-    ax1.plot(df.index, df['close'], label='Prix de Cloture', color='#4CAF50') # Ligne verte
+    ax1.plot(df.index, df['close'], label='Prix de Clôture', color='#4CAF50') # Vert
     ax1.set_title(f"Prix de Clôture ({selected_timeframe})", fontsize=14, color='white')
     ax1.set_ylabel("Prix (USDT)", color='white')
     ax1.tick_params(axis='y', labelcolor='white')
     ax1.tick_params(axis='x', labelcolor='white')
     ax1.grid(True, color='#444444')
-    st.pyplot(fig_price) # Affiche le graphique dans Streamlit
-    plt.close(fig_price) # Ferme la figure pour liberer de la memoire
+    st.pyplot(fig_price)
+    plt.close(fig_price)
     
     # 4.2 Graphique du RSI
     fig_rsi, ax2 = plt.subplots(figsize=(10, 3))
-    ax2.plot(df.index, df['RSI'], label='RSI (14)', color='cyan') # Ligne cyan
+    ax2.plot(df.index, df['RSI'], label='RSI (14)', color='cyan') # Cyan
     ax2.axhline(rsi_overbought, color='red', linestyle='--', label=f'Surachat ({rsi_overbought})')
     ax2.axhline(rsi_oversold, color='green', linestyle='--', label=f'Survente ({rsi_oversold})')
     ax2.set_title("Indice de Force Relative (RSI)", fontsize=14, color='white')
-    ax2.set_ylim(0, 100) # Fixer l'axe Y du RSI de 0 a 100
+    ax2.set_ylim(0, 100)
     ax2.legend(loc='lower left', frameon=True, facecolor='#2b2b2b', edgecolor='none', labelcolor='white')
     ax2.tick_params(axis='y', labelcolor='white')
     ax2.tick_params(axis='x', labelcolor='white')
@@ -314,8 +326,7 @@ if not df.empty:
 
     # 4.3 Graphique du Volume
     fig_volume, ax3 = plt.subplots(figsize=(10, 3))
-    # Utiliser une couleur differente pour le volume
-    ax3.bar(df.index, df['volume'], color='#FFA500', alpha=0.6) # Barres oranges
+    ax3.bar(df.index, df['volume'], color='#FFA500', alpha=0.6) # Orange
     ax3.set_title("Volume de Trading", fontsize=14, color='white')
     ax3.set_ylabel("Volume", color='white')
     ax3.tick_params(axis='y', labelcolor='white')
@@ -326,17 +337,13 @@ if not df.empty:
 
     # 4.4 Graphique de pronostic
     st.header(f"Pronostic du Prix pour {selected_symbol}")
-
     fig_forecast, ax_forecast = plt.subplots(figsize=(10, 5))
     
-    # Tracer le prix de clôture historique
     ax_forecast.plot(df.index, df['close'], label='Prix de Clôture Historique', color='#4CAF50', alpha=0.7)
 
-    # Préparer les données pour le pronostic
     last_close = df['close'].iloc[-1]
     last_timestamp = df.index[-1]
 
-    # Déterminer la durée de la projection (par exemple, 10 futures bougies)
     if 'm' in selected_timeframe:
         delta_unit = int(selected_timeframe.replace('m', ''))
         time_delta = datetime.timedelta(minutes=delta_unit)
@@ -346,31 +353,27 @@ if not df.empty:
     elif 'd' in selected_timeframe:
         delta_unit = int(selected_timeframe.replace('d', ''))
         time_delta = datetime.timedelta(days=delta_unit)
-    else: # Fallback au cas où
+    else:
         time_delta = datetime.timedelta(hours=1) 
     
-    future_timestamps = [last_timestamp + (time_delta * (i + 1)) for i in range(10)] # 10 bougies futures
-    forecast_prices = [last_close] # Le premier point de la projection est le dernier prix actuel
+    future_timestamps = [last_timestamp + (time_delta * (i + 1)) for i in range(10)]
+    forecast_prices = [last_close]
 
     if signal == 'ACHAT FORT':
-        # Projection haussiere
         for i in range(10):
             forecast_prices.append(forecast_prices[-1] * (1 + 0.001 * (1 + i/20))) 
         forecast_color = 'magenta'
         forecast_label = 'Pronostic : Hausse'
     elif signal == 'VENTE/CLÔTURE':
-        # Projection baissiere
         for i in range(10):
             forecast_prices.append(forecast_prices[-1] * (1 - 0.001 * (1 + i/20))) 
         forecast_color = 'magenta'
         forecast_label = 'Pronostic : Baisse'
     else: # NEUTRE
-        # Projection plate
         forecast_prices.extend([last_close] * 10)
         forecast_color = 'yellow'
         forecast_label = 'Pronostic : Neutre'
 
-    # Concaténer le dernier timestamp historique avec les timestamps futurs pour le tracé
     plot_timestamps = [last_timestamp] + future_timestamps
     
     ax_forecast.plot(plot_timestamps, forecast_prices, 
@@ -380,7 +383,6 @@ if not df.empty:
                      marker='o', 
                      markersize=4) 
     
-    # Marquer le point de départ du pronostic
     ax_forecast.plot(last_timestamp, last_close, 'o', color='white', markersize=6, label='Point de départ du pronostic')
 
     ax_forecast.set_title("Pronostic du Prix basés sur le RSI", fontsize=14, color='white')
@@ -391,7 +393,6 @@ if not df.empty:
     ax_forecast.legend(loc='upper left', frameon=True, facecolor='#2b2b2b', edgecolor='none', labelcolor='white')
     st.pyplot(fig_forecast)
     plt.close(fig_forecast)
-
 
 else:
     st.error("Impossible de charger les données. Veuillez vérifier votre connexion ou les paramètres.")
