@@ -182,7 +182,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Stratégie RSI")
 rsi_oversold = st.sidebar.slider("RSI Survente (Achat)", 10, 40, 30)
 rsi_overbought = st.sidebar.slider("RSI Surachat (Vente)", 60, 90, 70)
-st.sidebar.info(f"**Achat :** RSI < {rsi_oversold} | **Vente :** RSI > {rsi_overbought}")
+st.sidebar.info(f"**Achat :** RSI < {rsi_oversold} | **Vente :** RSI > {rsi_oversold}")
 
 # --- 2. Récupération et Analyse ---
 df = get_ohlcv_data(selected_symbol, selected_timeframe)
@@ -214,10 +214,36 @@ if not df.empty:
     
     backtest_df, final_value, profit_percent, trade_count = run_backtest(df.copy(), rsi_oversold, rsi_overbought)
     
-    col_a, col_b, col_c = st.columns(3)
+    # <<< MODIFICATION 1 : Calcul du gain moyen par heure >>>
+    # Calcul de la durée du backtest en heures
+    start_date = df.index.min()
+    end_date = df.index.max()
+    duration_timedelta = end_date - start_date
+    total_hours = duration_timedelta.total_seconds() / 3600
+
+    # Calcul du gain total et moyen par heure
+    total_profit = final_value - INITIAL_BALANCE
+    
+    # Éviter la division par zéro si total_hours est 0 (improbable mais sûr)
+    avg_hourly_gain = total_profit / total_hours if total_hours > 0 else 0.0
+    # <<< FIN MODIFICATION 1 >>>
+
+
+    # <<< MODIFICATION 2 : Passage de 3 à 4 colonnes >>>
+    col_a, col_b, col_c, col_d = st.columns(4)
+    # <<< FIN MODIFICATION 2 >>>
+    
     col_a.metric("Capital Initial", f"${INITIAL_BALANCE:.2f}")
     col_b.metric("Valeur Finale", f"${final_value:.2f}", delta=f"{profit_percent:.2f}%")
     col_c.metric("Nombre de Trades", trade_count)
+
+    # <<< MODIFICATION 3 : Ajout de la nouvelle métrique >>>
+    col_d.metric(
+        "Gain Moyen / Heure", 
+        f"${avg_hourly_gain:.4f}", 
+        help=f"Basé sur un gain total de ${total_profit:.2f} sur une période de {total_hours:.1f} heures."
+    )
+    # <<< FIN MODIFICATION 3 >>>
 
     st.subheader("Historique des Transactions")
     st.dataframe(backtest_df, use_container_width=True, hide_index=True)
@@ -270,4 +296,4 @@ else:
 
 if st.button('🔄 Rafraîchir les Données'):
     st.cache_data.clear()
-    st.experimental_rerun()
+    st.rerun() # <<< MODIFICATION : st.experimental_rerun() est obsolète, on utilise st.rerun()
