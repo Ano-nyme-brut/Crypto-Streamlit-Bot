@@ -4,7 +4,7 @@ import pandas as pd
 import pandas_ta as ta
 import datetime
 import matplotlib.pyplot as plt
-import numpy as np # <<< MODIFICATION : Import de numpy pour les calculs de pronostic
+import numpy as np 
 
 # --- 1. Custom CSS for Minimalist Design (Dark Theme) ---
 CUSTOM_CSS = """
@@ -78,7 +78,8 @@ AVAILABLE_SYMBOLS = [
 # CORRECTION: L'identifiant 'coinbasepro' a ete renomme en 'coinbase' dans ccxt.
 EXCHANGE = ccxt.coinbase() 
 RSI_PERIOD = 14
-INITIAL_BALANCE = 1000  # Capital de depart pour le Backtesting
+# <<< MODIFICATION : Le capital initial est maintenant défini par l'utilisateur
+# INITIAL_BALANCE = 1000  <-- Supprimé
 
 @st.cache_data(ttl=60*5) # Mise en cache des donnees pour 5 minutes
 def get_ohlcv_data(symbol, timeframe):
@@ -121,7 +122,8 @@ def check_trading_signal(df, rsi_oversold, rsi_overbought):
     
     return signal, close_price, last_rsi
 
-def run_backtest(df, rsi_oversold, rsi_overbought):
+# <<< MODIFICATION : La fonction accepte maintenant 'start_balance' en argument
+def run_backtest(df, rsi_oversold, rsi_overbought, start_balance):
     """Simule la strategie RSI sur les donnees historiques."""
     if df.empty:
         return pd.DataFrame(), 0.0, 0.0, 0
@@ -132,7 +134,8 @@ def run_backtest(df, rsi_oversold, rsi_overbought):
     df.loc[df['RSI'] > rsi_overbought, 'Signal'] = -1  # -1: Vendre (Surachat)
     
     # 2. Simulation de trading
-    balance = INITIAL_BALANCE
+    # <<< MODIFICATION : Utilise le 'start_balance' fourni par l'utilisateur
+    balance = start_balance 
     position = 0.0 # Quantite de crypto possedee
     trade_count = 0
     
@@ -156,7 +159,12 @@ def run_backtest(df, rsi_oversold, rsi_overbought):
 
     # 3. Calcul du resultat final
     final_value = balance + (position * df['close'].iloc[-1])
-    profit_percent = ((final_value - INITIAL_BALANCE) / INITIAL_BALANCE) * 100
+    
+    # <<< MODIFICATION : Calcule le profit en % basé sur 'start_balance'
+    if start_balance > 0:
+        profit_percent = ((final_value - start_balance) / start_balance) * 100
+    else:
+        profit_percent = 0.0
     
     return backtest_df, final_value, profit_percent, trade_count
 
@@ -175,9 +183,20 @@ st.caption(f"Dernière mise à jour : {datetime.datetime.now().strftime('%Y-%m-%
 # --- 1. Barre Latérale de Configuration ---
 st.sidebar.header("⚙️ Paramètres")
 selected_symbol = st.sidebar.selectbox("Paire Crypto", AVAILABLE_SYMBOLS)
-
-# MODIFICATION : Ajout des intervalles en minutes
 selected_timeframe = st.sidebar.selectbox("Intervalle", ['15m', '30m', '1h', '4h', '1d']) 
+
+st.sidebar.markdown("---")
+
+# <<< MODIFICATION : Ajout de la case pour le "prix à mettre" (capital)
+st.sidebar.subheader("💰 Capital (Prix à mettre)")
+user_capital = st.sidebar.number_input(
+    "Capital de départ (USDT)", 
+    min_value=10.0,  # Minimum 10 USDT
+    value=1000.0,    # Valeur par défaut
+    step=50.0,       # Incrément
+    help="Entrez le montant que vous souhaitez simuler pour le backtest."
+)
+# <<< FIN MODIFICATION
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Stratégie RSI")
@@ -213,7 +232,13 @@ if not df.empty:
     # --- 3. Backtesting et Performance ---
     st.header("Backtesting de la Stratégie")
     
-    backtest_df, final_value, profit_percent, trade_count = run_backtest(df.copy(), rsi_oversold, rsi_overbought)
+    # <<< MODIFICATION : Passe 'user_capital' à la fonction de backtest
+    backtest_df, final_value, profit_percent, trade_count = run_backtest(
+        df.copy(), 
+        rsi_oversold, 
+        rsi_overbought, 
+        user_capital # Utilise le capital de l'utilisateur
+    )
     
     # Calcul de la durée du backtest en heures
     start_date = df.index.min()
@@ -221,19 +246,34 @@ if not df.empty:
     duration_timedelta = end_date - start_date
     total_hours = duration_timedelta.total_seconds() / 3600
 
-    # Calcul du gain total et moyen par heure
-    total_profit = final_value - INITIAL_BALANCE
+    # <<< MODIFICATION : Calcule le profit total basé sur 'user_capital'
+    total_profit = final_value - user_capital
     
-    # Éviter la division par zéro si total_hours est 0 (improbable mais sûr)
+    # Éviter la division par zéro si total_hours est 0
     avg_hourly_gain = total_profit / total_hours if total_hours > 0 else 0.0
     
-    col_a, col_b, col_c, col_d = st.columns(4)
+    # <<< MODIFICATION : Passage de 4 à 5 colonnes pour la nouvelle case
+    col_a, col_b, col_c, col_d, col_e = st.columns(5)
     
-    col_a.metric("Capital Initial", f"${INITIAL_BALANCE:.2f}")
+    # Affiche le capital initial entré par l'utilisateur
+    col_a.metric("Capital Initial", f"${user_capital:.2f}") 
     col_b.metric("Valeur Finale", f"${final_value:.2f}", delta=f"{profit_percent:.2f}%")
-    col_c.metric("Nombre de Trades", trade_count)
-
-    col_d.metric(
+    
+    # <<< MODIFICATION : Ajout de la case "Potentiel de Gain"
+    gain_delta_color = "normal"
+    if total_profit < 0:
+        gain_delta_color = "inverse"
+        
+    col_c.metric(
+        "Potentiel de Gain (USD)", 
+        f"${total_profit:.2f}", 
+        delta_color=gain_delta_color,
+        help="Ceci est le gain (ou la perte) net en dollars sur la période de simulation."
+    )
+    # <<< FIN MODIFICATION
+    
+    col_d.metric("Nombre de Trades", trade_count)
+    col_e.metric(
         "Gain Moyen / Heure", 
         f"${avg_hourly_gain:.4f}", 
         help=f"Basé sur un gain total de ${total_profit:.2f} sur une période de {total_hours:.1f} heures."
@@ -284,7 +324,7 @@ if not df.empty:
     st.pyplot(fig_volume)
     plt.close(fig_volume)
 
-    # <<< MODIFICATION 4 : Nouveau graphique de pronostic >>>
+    # 4.4 Graphique de pronostic
     st.header(f"Pronostic du Prix pour {selected_symbol}")
 
     fig_forecast, ax_forecast = plt.subplots(figsize=(10, 5))
@@ -297,7 +337,6 @@ if not df.empty:
     last_timestamp = df.index[-1]
 
     # Déterminer la durée de la projection (par exemple, 10 futures bougies)
-    # Convertir le timeframe en timedelta pour calculer les futures dates
     if 'm' in selected_timeframe:
         delta_unit = int(selected_timeframe.replace('m', ''))
         time_delta = datetime.timedelta(minutes=delta_unit)
@@ -313,18 +352,16 @@ if not df.empty:
     future_timestamps = [last_timestamp + (time_delta * (i + 1)) for i in range(10)] # 10 bougies futures
     forecast_prices = [last_close] # Le premier point de la projection est le dernier prix actuel
 
-    # Définir l'amplitude du mouvement pour la projection (en % du prix actuel)
-    # Ceci est purement un exemple, la logique peut être plus complexe
     if signal == 'ACHAT FORT':
         # Projection haussiere
         for i in range(10):
-            forecast_prices.append(forecast_prices[-1] * (1 + 0.001 * (1 + i/20))) # Légère hausse progressive
+            forecast_prices.append(forecast_prices[-1] * (1 + 0.001 * (1 + i/20))) 
         forecast_color = 'magenta'
         forecast_label = 'Pronostic : Hausse'
     elif signal == 'VENTE/CLÔTURE':
         # Projection baissiere
         for i in range(10):
-            forecast_prices.append(forecast_prices[-1] * (1 - 0.001 * (1 + i/20))) # Légère baisse progressive
+            forecast_prices.append(forecast_prices[-1] * (1 - 0.001 * (1 + i/20))) 
         forecast_color = 'magenta'
         forecast_label = 'Pronostic : Baisse'
     else: # NEUTRE
@@ -341,7 +378,7 @@ if not df.empty:
                      color=forecast_color, 
                      linestyle='--', 
                      marker='o', 
-                     markersize=4) # Ligne pointillée et marqueurs
+                     markersize=4) 
     
     # Marquer le point de départ du pronostic
     ax_forecast.plot(last_timestamp, last_close, 'o', color='white', markersize=6, label='Point de départ du pronostic')
@@ -354,7 +391,7 @@ if not df.empty:
     ax_forecast.legend(loc='upper left', frameon=True, facecolor='#2b2b2b', edgecolor='none', labelcolor='white')
     st.pyplot(fig_forecast)
     plt.close(fig_forecast)
-    # <<< FIN MODIFICATION 4 >>>
+
 
 else:
     st.error("Impossible de charger les données. Veuillez vérifier votre connexion ou les paramètres.")
