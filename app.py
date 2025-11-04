@@ -1,5 +1,5 @@
 import streamlit as st
-import yfinance as yf  ### MODIFIÉ : Import yfinance
+import ccxt
 import pandas as pd
 import pandas_ta as ta
 import datetime
@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np 
 
 # --- 1. Custom CSS pour un Design "Fintech Moderne" ---
-# (CSS Inchangé)
 CUSTOM_CSS = """
 <style>
 /* Thème : "Fintech Moderne"
@@ -115,105 +114,34 @@ footer { visibility: hidden; }
 """
 
 # --- Configuration et Constantes ---
-
-### MODIFIÉ : Dictionnaire de recherche flexible ###
-SEARCH_MAP = {
-    # Cryptos (nom complet -> Ticker YFinance)
-    "BITCOIN": "BTC-USD",
-    "ETHEREUM": "ETH-USD",
-    "SOLANA": "SOL-USD",
-    "BNB": "BNB-USD",
-    "RIPPLE": "XRP-USD",
-    "CARDANO": "ADA-USD",
-    "DOGECOIN": "DOGE-USD",
-    "CHAINLINK": "LINK-USD",
-    
-    # Actions (nom compagnie -> Ticker YFinance)
-    "APPLE": "AAPL",
-    "MICROSOFT": "MSFT",
-    "GOOGLE": "GOOGL",
-    "ALPHABET": "GOOGL",
-    "AMAZON": "AMZN",
-    "NVIDIA": "NVDA",
-    "TESLA": "TSLA",
-    "META": "META",
-    "FACEBOOK": "META",
-    "CAC 40": "^FCHI", # Indice
-    "LVMH": "MC.PA", # Ticker Paris
-    "TOTAL": "TTE.PA"
-}
-
-### MODIFIÉ : Liste pour le Scanner (Mix Actions/Crypto) ###
-SCAN_LIST = [
-    # Cryptos
-    'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 
-    'ADA-USD', 'DOGE-USD', 'LINK-USD',
-    # Actions US
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META',
-    # Actions FR (Indices)
-    'MC.PA', 'TTE.PA', '^FCHI'
+AVAILABLE_SYMBOLS = [
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 
+    'XRP/USDT', 'ADA/USDT', 'DOGE/USDT', 'LINK/USDT'
 ]
-
+EXCHANGE = ccxt.coinbase() 
 RSI_PERIOD = 14
 
-### MODIFIÉ : Fonction de récupération des données (utilise yfinance) ###
 @st.cache_data(ttl=60*5)
-def get_ohlcv_data(symbol, timeframe, verbose=True):
-    """Récupère les données OHLCV depuis Yahoo Finance."""
-    if verbose:
-        st.info(f"Connexion à Yahoo Finance pour charger les données {symbol}...")
-    
+def get_ohlcv_data(symbol, timeframe):
+    st.info(f"Connexion à l'exchange pour charger les données {symbol}...")
     try:
-        ticker_obj = yf.Ticker(symbol)
-        
-        # Définir la période en fonction de l'intervalle
-        # YFinance a des limites de période pour les données intraday
-        if 'm' in timeframe or 'h' in timeframe:
-            # 15m, 30m, 1h -> 60 derniers jours
-            period = '60d'
-        else:
-            # '1d' -> 2 dernières années
-            period = '2y'
-            
-        df = ticker_obj.history(period=period, interval=timeframe)
-
-        if df.empty:
-            if verbose:
-                st.error(f"Aucune donnée trouvée pour {symbol} avec l'intervalle {timeframe}.")
-                st.error("Essayez un autre symbole (ex: 'AAPL', 'BTC-USD') ou un intervalle ('1d').")
-            return pd.DataFrame()
-
-        # Renommage des colonnes (YFinance utilise des majuscules)
-        df = df.rename(columns={
-            'Open': 'open',
-            'High': 'high',
-            'Low': 'low',
-            'Close': 'close',
-            'Volume': 'volume'
-        })
-        
-        # S'assurer que les colonnes nécessaires sont présentes
-        df = df[['open', 'high', 'low', 'close', 'volume']]
-        
+        ohlcv = EXCHANGE.fetch_ohlcv(symbol, timeframe, limit=500)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df = df.set_index('timestamp')
         return df
-        
     except Exception as e:
-        if verbose:
-            st.error(f"Erreur de connexion à YFinance ou de récupération des données : {e}")
-            st.error("Impossible de charger les données. Vérifiez le symbole (ticker).")
+        st.error(f"Erreur de connexion à l'exchange ou de récupération des données : {e}")
+        st.error("Impossible de charger les données. Veuillez vérifier l'exchange ou la paire sélectionnée.")
         return pd.DataFrame()
-### FIN MODIFIÉ ###
-
 
 def calculate_indicators(df):
-    """Calcule les indicateurs techniques (RSI) pour le DataFrame."""
     if not df.empty:
         df['RSI'] = ta.rsi(df['close'], length=RSI_PERIOD)
         df = df.dropna()
     return df
 
 def check_trading_signal(df, rsi_oversold, rsi_overbought):
-    """Vérifie le dernier signal de trading basé sur le RSI."""
     if df.empty:
         return 'ERREUR', 0.0, 0.0
         
@@ -230,55 +158,7 @@ def check_trading_signal(df, rsi_oversold, rsi_overbought):
     
     return signal, close_price, last_rsi
 
-### MODIFIÉ : Scan_market utilise la nouvelle fonction get_ohlcv_data ###
-@st.cache_data(ttl=60*5)
-def scan_market(symbols, timeframe, rsi_oversold, rsi_overbought):
-    """
-    Scanne toutes les paires dans SCAN_LIST pour trouver des signaux.
-    """
-    st.info(f"Scan en cours de {len(symbols)} symboles (Actions & Cryptos) sur l'intervalle {timeframe}...")
-    market_data = []
-    
-    progress_bar = st.progress(0)
-    total_symbols = len(symbols)
-    
-    for i, symbol in enumerate(symbols):
-        # Récupère les données (verbose=False pour éviter les messages en boucle)
-        df = get_ohlcv_data(symbol, timeframe, verbose=False) 
-        df = calculate_indicators(df)
-        
-        if not df.empty:
-            signal, price, last_rsi = check_trading_signal(df, rsi_oversold, rsi_overbought)
-            market_data.append({
-                'Symbole': symbol,
-                'Prix Actuel': price,
-                'RSI': last_rsi,
-                'Signal': signal
-            })
-        else:
-            market_data.append({
-                'Symbole': symbol,
-                'Prix Actuel': 0.0,
-                'RSI': 0.0,
-                'Signal': 'ERREUR DATA'
-            })
-        
-        progress_bar.progress((i + 1) / total_symbols)
-    
-    progress_bar.empty() # Cache la barre de progression
-    
-    # Conversion en DataFrame
-    market_df = pd.DataFrame(market_data)
-    
-    # Tri par RSI (croissant)
-    market_df = market_df.sort_values(by='RSI', ascending=True)
-    
-    return market_df
-### FIN MODIFIÉ ###
-
-
 def run_backtest(df, rsi_oversold, rsi_overbought, start_balance):
-    """Exécute un backtest simple basé sur la stratégie RSI."""
     if df.empty:
         return pd.DataFrame(), 0.0, 0.0, 0
     
@@ -317,39 +197,24 @@ def run_backtest(df, rsi_oversold, rsi_overbought, start_balance):
 
 # --- Interface Streamlit ---
 
-st.set_page_config(layout="wide", page_title="Mon Bot Analyste (Actions & Crypto)", initial_sidebar_state="expanded")
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+st.set_page_config(layout="wide", page_title="Mon Bot Analyste Crypto", initial_sidebar_state="expanded")
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True) # Injecte le CSS personnalisé
+
+# Changement de style Matplotlib pour correspondre au thème sombre
 plt.style.use('dark_background') 
 
-st.title("📈 Bot d'Analyse (Actions & Crypto) & Backtest")
-st.caption(f"Données via Yahoo Finance | Dernière mise à jour : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.title("💰 Bot d'Analyse Crypto (RSI) & Backtest")
+st.caption(f"Dernière mise à jour : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # --- 1. Barre Latérale de Configuration ---
 st.sidebar.header("⚙️ Paramètres")
-
-### MODIFIÉ : Barre de recherche ###
-st.sidebar.markdown("### 1. Recherche de Symbole")
-user_input = st.sidebar.text_input(
-    "Rechercher (Nom ou Ticker)", 
-    "Bitcoin",
-    help="Ex: 'Bitcoin', 'Apple', 'AAPL', 'BTC-USD', 'MC.PA' (LVMH)"
-)
-# Logique de recherche flexible
-# 1. Met en majuscule, 2. Cherche dans le dictionnaire, 3. Si non trouvé, utilise l'input (en majuscule)
-selected_symbol = SEARCH_MAP.get(user_input.upper(), user_input.upper())
-st.sidebar.info(f"Ticker sélectionné : **{selected_symbol}**")
-### FIN MODIFIÉ ###
-
-
-st.sidebar.markdown("### 2. Paramètres d'Analyse")
-# Note : YFinance a des intervalles différents de CCXT
-# '15m', '30m', '1h', '1d' sont compatibles
-selected_timeframe = st.sidebar.selectbox("Intervalle", ['1h', '1d', '15m', '30m', '4h']) 
+selected_symbol = st.sidebar.selectbox("Paire Crypto", AVAILABLE_SYMBOLS)
+selected_timeframe = st.sidebar.selectbox("Intervalle", ['15m', '30m', '1h', '4h', '1d']) 
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("💰 Capital (Prix à mettre)")
 user_capital = st.sidebar.number_input(
-    "Capital de départ ($/€)", 
+    "Capital de départ (USDT)", 
     min_value=10.0, 
     value=1000.0, 
     step=50.0,
@@ -363,19 +228,20 @@ rsi_overbought = st.sidebar.slider("RSI Surachat (Vente)", 60, 90, 70)
 st.sidebar.info(f"**Achat :** RSI < {rsi_oversold} | **Vente :** RSI > {rsi_overbought}")
 
 # --- 2. Récupération et Analyse ---
-df = get_ohlcv_data(selected_symbol, selected_timeframe, verbose=True) 
+df = get_ohlcv_data(selected_symbol, selected_timeframe)
 df = calculate_indicators(df)
 
 if not df.empty:
     signal, price, last_rsi = check_trading_signal(df, rsi_oversold, rsi_overbought)
     
-    st.header(f"Analyse Détaillée : {selected_symbol}")
+    st.header("Analyse en Temps Réel")
     
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Symbole / Intervalle", f"{selected_symbol} / {selected_timeframe}")
-    col2.metric("Prix Actuel", f"${price:,.2f}") ### MODIFIÉ : Formatage prix
+    col1.metric("Paire / Intervalle", f"{selected_symbol} / {selected_timeframe}")
+    col2.metric("Prix Actuel", f"${price:.2f}")
     col3.metric(f"RSI ({RSI_PERIOD})", f"{last_rsi:.2f}")
     
+    # Affichage du Signal (utilise les styles CSS personnalisés)
     if signal == 'ACHAT FORT':
         col4.success(f"SIGNAL : {signal}")
     elif signal == 'VENTE/CLÔTURE':
@@ -385,37 +251,8 @@ if not df.empty:
         
     st.markdown("---")
     
-    ### MODIFIÉ : Section Scanner (utilise SCAN_LIST) ###
-    st.header("🔍 Pronostic du Marché (Scanner)")
-    st.caption(f"Analyse de {len(SCAN_LIST)} symboles (Actions & Cryptos) sur l'intervalle {selected_timeframe}.")
-
-    market_scan_df = scan_market(
-        SCAN_LIST, 
-        selected_timeframe, 
-        rsi_oversold, 
-        rsi_overbought
-    )
-    
-    formatted_scan_df = market_scan_df.copy()
-    formatted_scan_df['Prix Actuel'] = formatted_scan_df['Prix Actuel'].map('${:,.2f}'.format)
-    formatted_scan_df['RSI'] = formatted_scan_df['RSI'].map('{:.2f}'.format)
-    
-    st.dataframe(
-        formatted_scan_df, 
-        use_container_width=True, 
-        hide_index=True,
-        column_config={
-            "Symbole": st.column_config.TextColumn("Symbole", width="small"),
-            "Prix Actuel": st.column_config.TextColumn("Prix Actuel", width="medium"),
-            "RSI": st.column_config.TextColumn("RSI", width="small"),
-            "Signal": st.column_config.TextColumn("Signal", width="medium"),
-        }
-    )
-    st.markdown("---")
-    ### FIN MODIFIÉ ###
-
-    # --- 3. Backtesting et Performance (pour l'actif sélectionné) ---
-    st.header(f"Backtesting de la Stratégie sur {selected_symbol}")
+    # --- 3. Backtesting et Performance ---
+    st.header("Backtesting de la Stratégie")
     
     backtest_df, final_value, profit_percent, trade_count = run_backtest(
         df.copy(), 
@@ -433,18 +270,18 @@ if not df.empty:
     
     col_a, col_b, col_c, col_d, col_e = st.columns(5)
     
-    col_a.metric("Capital Initial", f"${user_capital:,.2f}") 
-    col_b.metric("Valeur Finale", f"${final_value:,.2f}", delta=f"{profit_percent:.2f}%")
+    col_a.metric("Capital Initial", f"${user_capital:.2f}") 
+    col_b.metric("Valeur Finale", f"${final_value:.2f}", delta=f"{profit_percent:.2f}%")
     
     gain_delta_color = "normal"
     if total_profit < 0:
         gain_delta_color = "inverse"
         
     col_c.metric(
-        "Potentiel de Gain (Net)", 
-        f"${total_profit:,.2f}", 
+        "Potentiel de Gain (USD)", 
+        f"${total_profit:.2f}", 
         delta_color=gain_delta_color,
-        help="Ceci est le gain (ou la perte) net en dollars/euros sur la période de simulation."
+        help="Ceci est le gain (ou la perte) net en dollars sur la période de simulation."
     )
     
     col_d.metric("Nombre de Trades", trade_count)
@@ -459,23 +296,23 @@ if not df.empty:
 
     st.markdown("---")
 
-    # --- 4. Visualisation Graphique (pour l'actif sélectionné) ---
+    # --- 4. Visualisation Graphique ---
     st.header(f"Graphiques d'Analyse Technique pour {selected_symbol}")
     
     # 4.1 Graphique du Prix
     fig_price, ax1 = plt.subplots(figsize=(10, 5))
-    ax1.plot(df.index, df['close'], label='Prix de Clôture', color='#4CAF50') 
+    ax1.plot(df.index, df['close'], label='Prix de Clôture', color='#4CAF50') # Vert
     ax1.set_title(f"Prix de Clôture ({selected_timeframe})", fontsize=14, color='white')
-    ax1.set_ylabel("Prix ($/€)", color='white') ### MODIFIÉ : Label Y
+    ax1.set_ylabel("Prix (USDT)", color='white')
     ax1.tick_params(axis='y', labelcolor='white')
     ax1.tick_params(axis='x', labelcolor='white')
     ax1.grid(True, color='#444444')
     st.pyplot(fig_price)
     plt.close(fig_price)
     
-    # 4.2 Graphique du RSI (Inchangé)
+    # 4.2 Graphique du RSI
     fig_rsi, ax2 = plt.subplots(figsize=(10, 3))
-    ax2.plot(df.index, df['RSI'], label='RSI (14)', color='cyan')
+    ax2.plot(df.index, df['RSI'], label='RSI (14)', color='cyan') # Cyan
     ax2.axhline(rsi_overbought, color='red', linestyle='--', label=f'Surachat ({rsi_overbought})')
     ax2.axhline(rsi_oversold, color='green', linestyle='--', label=f'Survente ({rsi_oversold})')
     ax2.set_title("Indice de Force Relative (RSI)", fontsize=14, color='white')
@@ -487,9 +324,9 @@ if not df.empty:
     st.pyplot(fig_rsi)
     plt.close(fig_rsi)
 
-    # 4.3 Graphique du Volume (Inchangé)
+    # 4.3 Graphique du Volume
     fig_volume, ax3 = plt.subplots(figsize=(10, 3))
-    ax3.bar(df.index, df['volume'], color='#FFA500', alpha=0.6) 
+    ax3.bar(df.index, df['volume'], color='#FFA500', alpha=0.6) # Orange
     ax3.set_title("Volume de Trading", fontsize=14, color='white')
     ax3.set_ylabel("Volume", color='white')
     ax3.tick_params(axis='y', labelcolor='white')
@@ -507,38 +344,35 @@ if not df.empty:
     last_close = df['close'].iloc[-1]
     last_timestamp = df.index[-1]
 
-    # Logique de delta temps (doit gérer les DataFrames YFinance)
-    try:
-        # Tente de déduire la fréquence (meilleure méthode)
-        time_delta = pd.to_timedelta(pd.infer_freq(df.index))
-    except (TypeError, ValueError):
-        # Si échec (intervalles irréguliers ?), utilise la différence moyenne
-        if len(df.index) > 1:
-            time_delta = (df.index[-1] - df.index[0]) / (len(df.index) - 1)
-        else:
-            # Fallback si 1 seule donnée
-             time_delta = datetime.timedelta(hours=1)
+    if 'm' in selected_timeframe:
+        delta_unit = int(selected_timeframe.replace('m', ''))
+        time_delta = datetime.timedelta(minutes=delta_unit)
+    elif 'h' in selected_timeframe:
+        delta_unit = int(selected_timeframe.replace('h', ''))
+        time_delta = datetime.timedelta(hours=delta_unit)
+    elif 'd' in selected_timeframe:
+        delta_unit = int(selected_timeframe.replace('d', ''))
+        time_delta = datetime.timedelta(days=delta_unit)
+    else:
+        time_delta = datetime.timedelta(hours=1) 
     
     future_timestamps = [last_timestamp + (time_delta * (i + 1)) for i in range(10)]
     forecast_prices = [last_close]
 
-    # Le pronostic est basé sur une simple extrapolation, à ne pas prendre comme conseil financier
     if signal == 'ACHAT FORT':
-        change_factor = 1 + (last_rsi / 10000) # Petite hausse
+        for i in range(10):
+            forecast_prices.append(forecast_prices[-1] * (1 + 0.001 * (1 + i/20))) 
         forecast_color = 'magenta'
         forecast_label = 'Pronostic : Hausse'
     elif signal == 'VENTE/CLÔTURE':
-        change_factor = 1 - ((100-last_rsi) / 10000) # Petite baisse
+        for i in range(10):
+            forecast_prices.append(forecast_prices[-1] * (1 - 0.001 * (1 + i/20))) 
         forecast_color = 'magenta'
         forecast_label = 'Pronostic : Baisse'
     else: # NEUTRE
-        change_factor = 1.0
+        forecast_prices.extend([last_close] * 10)
         forecast_color = 'yellow'
         forecast_label = 'Pronostic : Neutre'
-
-    for i in range(10):
-        # Simule une légère variation basée sur le signal
-        forecast_prices.append(forecast_prices[-1] * (change_factor + np.random.normal(0, 0.0001)))
 
     plot_timestamps = [last_timestamp] + future_timestamps
     
@@ -552,7 +386,7 @@ if not df.empty:
     ax_forecast.plot(last_timestamp, last_close, 'o', color='white', markersize=6, label='Point de départ du pronostic')
 
     ax_forecast.set_title("Pronostic du Prix basés sur le RSI", fontsize=14, color='white')
-    ax_forecast.set_ylabel("Prix ($/€)", color='white')
+    ax_forecast.set_ylabel("Prix (USDT)", color='white')
     ax_forecast.tick_params(axis='y', labelcolor='white')
     ax_forecast.tick_params(axis='x', labelcolor='white')
     ax_forecast.grid(True, color='#444444')
@@ -561,9 +395,8 @@ if not df.empty:
     plt.close(fig_forecast)
 
 else:
-    st.error("Impossible de charger les données pour le symbole sélectionné. Vérifiez votre saisie ou l'intervalle.")
+    st.error("Impossible de charger les données. Veuillez vérifier votre connexion ou les paramètres.")
 
 if st.button('🔄 Rafraîchir les Données'):
     st.cache_data.clear()
     st.rerun()
-
